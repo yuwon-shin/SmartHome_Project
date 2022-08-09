@@ -4,6 +4,11 @@ import json
 import logging
 import time
 import fitbit
+from influxdb import InfluxDBClient
+from dotenv import load_dotenv
+
+# .env 파일을 불러와 환경변수에 넣어줌.
+load_dotenv()
 
 # 로그 생성
 logger = logging.getLogger()
@@ -19,47 +24,53 @@ file_handler = logging.FileHandler('my.log')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
-FITBIT_RESOURCE = ['activities/activityCalories', 
-'activities/calories', 
-'activities/caloriesBMR',
-'activities/distance',
-'activities/elevation',
-'activities/floors',
-'activities/heart',
-'activities/minutesFairlyActive',
-'activities/minutesLightlyActive',
-'activities/minutesSedentary',
-'activities/minutesVeryActive',
-'activities/steps',
-'activities/tracker/activityCalories',
-'activities/tracker/calories',
-'activities/tracker/distance',
-'activities/tracker/elevation',
-'activities/tracker/floors',
-'activities/tracker/minutesFairlyActive',
-'activities/tracker/minutesLightlyActive',
-'activities/tracker/minutesSedentary',
-'activities/tracker/minutesVeryActive',
-'activities/tracker/steps',
-'body/bmi',
-'body/fat',
-'body/weight',
-'sleep/awakeningsCount',
-'sleep/efficiency',
-'sleep/minutesAfterWakeup',
-'sleep/minutesAsleep',
-'sleep/minutesAwake',
-'sleep/minutesToFallAsleep',
-'sleep/startTime',
-'sleep/timeInBed', ]
+# Fitbit이 제공하는 Resource
+FITBIT_ACTIVITES_INTRADAY_RESOURCE = [
+    'activities-calories',
+    'activities-distance',
+    'activities-elevation',
+    'activities-floors',
+    'activities-heart',
+    'activities-minutesFairlyActive',
+    'activities-minutesLightlyActive',
+    'activities-minutesSedentary',
+    'activities-minutesVeryActive',
+    'activities-steps',
+    'activities-tracker-activityCalories',
+]
 
-FITBIT_ACTIVITES_INTRADAY_RESOURCE = []
+FITBIT_ACTIVITES_NON_INTRADAY_RESOURCE = [
+    'activities-activityCalories',
+    'activities-caloriesBMR',
+    'activities-tracker-calories',
+    'activities-tracker-distance',
+    'activities-tracker-elevation',
+    'activities-tracker-floors',
+    'activities-tracker-minutesFairlyActive',
+    'activities-tracker-minutesLightlyActive',
+    'activities-tracker-minutesSedentary',
+    'activities-tracker-minutesVeryActive',
+    'activities-tracker-steps',
+]
 
-FITBIT_ACTIVITES_NON_INTRADAY_RESOURCE = []
+FITBIT_SLEEP_RESOURCE = [
+    'sleep-awakeningsCount',
+    'sleep-efficiency',
+    'sleep-minutesAfterWakeup',
+    'sleep-minutesAsleep',
+    'sleep-minutesAwake',
+    'sleep-minutesToFallAsleep',
+    'sleep-startTime',
+    'sleep-timeInBed'
+]
 
-FITBIT_SLEEP_RESOURCE = []
+FITBIT_BODY_RESOURCE = [
+    'body-weight',
+    'body-fat',
+    'body-bmi'
+]
 
-FITBIT_BODY_RESOURCE = []
+FITBIT_BRATTARY_RESOURCE = 'device-bettray'
 
 class Fitbit2Influxdb:
     def __init__(self):
@@ -69,20 +80,39 @@ class Fitbit2Influxdb:
         self_client_secret: str | None = ''
         self.expires_at: int | None = 0
         self.authd_client = None
+        self.influxdb_client = None
 
-        self.load_json()
+        self.fitbit_load_json()
         self.connect_fitbit_api()
-        self.save_json()
+        self.fitbit_save_json()
+        # self.connect_influxdb()
+
+    def connect_influxdb(self):
+        ip = ''
+        port = ''
+        if port.isdigit():
+            port = int(port)
+        else:
+            raise TypeError('Port is not number. Please check')
+        username = ''
+        password = ''
+        database = ''
+        self.influxdb_client = InfluxDBClient(ip, port, username, password, database)
+        logging.info('Connected influxDB')
     
-    def connect_fitbit_api(self):
+    # fitbit API에 토근값과 함께 접속
+    def connect_fitbit_api(self): 
         self.authd_client = fitbit.Fitbit(self.client_id, self.client_secret, access_token=self.access_token, refresh_token=self.refresh_token)
         logging.info('Connected fitbit api')
 
         if int(time.time()) - self.expires_at > 3600:
             self.authd_client.client.refresh_token()
-            logging.info('Expires refresh token! refreshing token...')
+            logging.info('Before expires refresh token! refreshing token...')
 
-    def load_json(self):
+    def influxdb_load_env(self):
+        pass
+
+    def fitbit_load_json(self):
         if os.path.exists('save.json'):
             with open('save.json', 'r') as f:
                 load_data = json.load(f)
@@ -100,7 +130,7 @@ class Fitbit2Influxdb:
             logging.error('Cannot access "save.json": No such file and directory.')
             raise Exception('Cannot access "save.json": No such file and directory. Please check README')
     
-    def save_json(self):
+    def fitbit_save_json(self):
         token = self.authd_client.client.session.token
         config_contents = {
             "access_token": token.get("access_token"),
@@ -132,4 +162,7 @@ if __name__ == '__main__':
     logging.info('Get Started Fitbit2InfluxDB')
     test = Fitbit2Influxdb()
 
-    test.update()
+    result = test.authd_client.get_devices()
+
+    print(result)
+    # test.update()
