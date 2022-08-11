@@ -37,12 +37,12 @@ FITBIT_ACTIVITES_INTRADAY_RESOURCE = [
     'activities-minutesSedentary',
     'activities-minutesVeryActive',
     'activities-steps',
-    'activities-tracker-activityCalories',
 ]
 
 FITBIT_ACTIVITES_NON_INTRADAY_RESOURCE = [
     'activities-activityCalories',
     'activities-caloriesBMR',
+    'activities-tracker-activityCalories',
     'activities-tracker-calories',
     'activities-tracker-distance',
     'activities-tracker-elevation',
@@ -71,26 +71,62 @@ FITBIT_BODY_RESOURCE = [
     'body-bmi'
 ]
 
-FITBIT_BRATTARY_RESOURCE = 'device-bettray'
+FITBIT_BRATTARY_RESOURCE = 'devices-battery'
 
-DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
+FITBIT_RESOURCE_TO_MEASUREMENT = {
+    "activities-activityCalories": "cal",
+    "activities-calories": "cal",
+    "activities-caloriesBMR":"cal",
+    "activities-distance":"mile",
+    "activities-elevation":"ft",
+    "activities-floors":"floors",
+    "activities-heart":"bpm",
+    "activities-minutesFairlyActive":"min",
+    "activities-minutesLightlyActive":"min",
+    "activities-minutesSedentary":"min",
+    "activities-minutesVeryActive":"min",
+    "activities-steps":"steps",
+    "activities-tracker-activityCalories":"cal",
+    "activities-tracker-calories":"cal",
+    "activities-tracker-distance":"mile",
+    "activities-tracker-elevation":"ft",
+    "activities-tracker-floors":"floors",
+    "activities-tracker-minutesFairlyActive":"min",
+    "activities-tracker-minutesLightlyActive":"min",
+    "activities-tracker-minutesSedentary":"min",
+    "activities-tracker-minutesVeryActive":"min",
+    "activities-tracker-steps":"steps",
+    "body-bmi":"BMI",
+    "body-fat":"%",
+    "body-weight":"lb",
+    "sleep-awakeningsCount":"times awaken",
+    "sleep-efficiency":"%",
+    "sleep-minutesAfterWakeup":"min",
+    "sleep-minutesAsleep":"min",
+    "sleep-minutesAwake":"min",
+    "sleep-minutesToFallAsleep":"min",
+    "sleep-startTime":"startTime",
+    "sleep-timeInBed":"min"
+}
+
+DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S.%f+09:00'
 
 EXAM_FITBIT_FILE = {
     "access_token": "DEFAULT_ACCESS_TOKEN",
     "refresh_token": "DEFAULT_REFRESH_TOKEN",
     "client_id": "DEFAULT_CLIENT_ID",
     "client_secret": "DEFAULT_CLIENT_SECRET",
-    "EXPIRES_TIME": "DEFAULT_EXPIRES_TIME",
+    "last_saved_at": "DEFAULT_last_saved_at",
 }
 
 class Fitbit2Influxdb:
-    def __init__(self, entity_id='fitbit'):
+    def __init__(self, entity_id):
         self.entity_id = entity_id
         self.access_token = ''
         self.refresh_token = ''
         self.client_id = ''
         self_client_secret: str | None = ''
-        self.expires_at: int | None = 0
+        self.last_saved_at: int | None = 0
         self.authd_client = None
         self.influxdb_client = None
 
@@ -114,7 +150,7 @@ class Fitbit2Influxdb:
         self.authd_client = fitbit.Fitbit(self.client_id, self.client_secret, access_token=self.access_token, refresh_token=self.refresh_token)
         logging.info('Connected fitbit api')
 
-        if int(time.time()) - self.expires_at > 3600:
+        if self.last_saved_at + 3600 > time.time():
             self.authd_client.client.refresh_token()
             logging.info('Before expires refresh token! refreshing token...')
     
@@ -144,12 +180,15 @@ class Fitbit2Influxdb:
         if os.path.exists(self.entity_id + '.json'):
             with open(self.entity_id + '.json', 'r') as f:
                 load_data = json.load(f)
-                self.expires_at = load_data['EXPIRES_TIME']
+                self.last_saved_at = load_data['last_saved_at']
                 self.access_token = load_data['access_token']
                 self.refresh_token = load_data['refresh_token']
                 self.client_id = load_data['client_id']
                 self.client_secret = load_data['client_secret']
                 logging.info('Finish load json file')
+
+                # DEFAULT check
+                
         else:
             with open(self.entity_id + '.json', 'w') as f:
                 json.dump(EXAM_FITBIT_FILE, f, indent=4)
@@ -163,7 +202,7 @@ class Fitbit2Influxdb:
             "refresh_token": token.get("refresh_token"),
             "client_id": self.client_id,
             "client_secret": self.client_secret,
-            "LAST_SAVED_AT": int(time.time()),
+            "last_saved_at": int(time.time()),
         }
 
         with open(self.entity_id + '.json', 'w') as json_file:
@@ -179,53 +218,66 @@ class Fitbit2Influxdb:
             timestamp = self.fitbit_time_to_datetime(time).strftime(DATETIME_FORMAT)
 
             payload_json = {
-                'measurement': 'abc',
+                'measurement': FITBIT_RESOURCE_TO_MEASUREMENT[resource],
                 'tags': {
                     'domain': 'sensor',
-                    'entity_id': self.entity_id,
+                    'entity_id': self.entity_id + '_' + resource,
                 },
                 'fields': {
-                    'value': value
+                    'value': float(value)
                 },
-                'timestamp': timestamp
+                'time': timestamp
             }
+            try:
+                self.influxdb_client.write_points([payload_json])
+            except Exception as e:
+                print(e)
+
+        logging.info(resource + '- Success write data')
 
             
-
     def influxdb_write_non_intraday_date(self, resource, value):
-        pass
+        payload_json = {
+            'measurement': FITBIT_RESOURCE_TO_MEASUREMENT[resource],
+            'tags': {
+                'domain': 'sensor',
+                'entity_id': self.entity_id + '_' + resource,
+            },
+            'fields': {
+                'value': float(value)
+            },
+        }
+
+        try:
+            self.influxdb_client.write_points([payload_json])
+        except Exception as e:
+            logging.error(e)
+        
+        logging.info(resource + '- Success write data')
 
     def update(self):
         for resource in FITBIT_ACTIVITES_INTRADAY_RESOURCE:
             detail_level = '1sec' if resource == 'activities-heart' else '1min'
             response = self.authd_client.intraday_time_series(resource.replace('-', '/'), detail_level=detail_level)
 
-            dataset = response[resource + '-intraday'][dataset]
+            dataset = response[resource + '-intraday']['dataset']
 
             self.influxdb_write_intraday_data(resource, dataset)
+
+            # with open(resource + '.json', 'w') as f:
+            #     json.dump(response, f)
         
+        for resource in (FITBIT_ACTIVITES_NON_INTRADAY_RESOURCE + FITBIT_BODY_RESOURCE + FITBIT_SLEEP_RESOURCE):
+            response = self.authd_client.intraday_time_series(resource.replace('-', '/'), detail_level='1min')
+
+            data = response[resource][0]['value']
+
+            self.influxdb_write_non_intraday_date(resource, data)
+        
+        logging.info('update done.')
 
 if __name__ == '__main__':
     logging.info('Get Started Fitbit2InfluxDB')
-    test = Fitbit2Influxdb()
+    test = Fitbit2Influxdb('fitbit')
 
-    # foramt_test = '%Y-%m-%dT%H:%M:%S.%fZ'
-
-    # test_json = {
-    #     'measurement': 'abc',
-    #     'tags': {
-    #         'domain': 'sensor',
-    #         'entity_id': 'test',
-    #     },
-    #     'fields': {
-    #         'value': 'value'
-    #     },
-    #     'timestamp': "2022-08-09T00:00:00.0000Z"
-
-    # }
-    # test.influxdb_client.write()
-
-    result = test.authd_client.get_devices()
-
-    print(result)
-    # test.update()
+    test.update()
