@@ -1,10 +1,12 @@
 #!/usr/bin/env python
+from numbers import Number
 import os
 import json
 import logging
 import time
 import fitbit
 import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
 from influxdb import InfluxDBClient
 from dotenv import load_dotenv
 
@@ -73,6 +75,7 @@ FITBIT_BODY_RESOURCE = [
 
 FITBIT_BRATTARY_RESOURCE = 'devices-battery'
 
+# fitbit resource에 대응되는 단위
 FITBIT_RESOURCE_TO_MEASUREMENT = {
     "activities-activityCalories": "cal",
     "activities-calories": "cal",
@@ -109,6 +112,7 @@ FITBIT_RESOURCE_TO_MEASUREMENT = {
     "sleep-timeInBed":"min"
 }
 
+# influxdb time에 대한 foramt
 DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S.%f+09:00'
 
 EXAM_FITBIT_FILE = {
@@ -135,24 +139,27 @@ class Fitbit2Influxdb:
         self.fitbit_save_json()
         self.connect_influxdb()
 
+        self.sched = BackgroundScheduler()
+
+        self.sched.add_job(self.update, 'cron', minute='29', id=self.entity_id+'-update-1')
+        self.sched.add_job(self.update, 'cron', minute='58', id=self.entity_id+'-update-2')
+
+        self.sched.start()
+
     def connect_influxdb(self):
         ip, port, username, password, database = self.influxdb_load_env()
         if port.isdigit():
             port = int(port)
         else:
-            logging.error("Port is not number. Please check")
+            logging.error(self.entity_id + "- Port is not number. Please check")
             raise TypeError('Port is not number. Please check')
         self.influxdb_client = InfluxDBClient(ip, port, username, password, database)
-        logging.info('Connected influxDB')
+        logging.info(self.entity_id + '- Connected influxDB')
     
     # fitbit API에 토근값과 함께 접속
     def connect_fitbit_api(self): 
         self.authd_client = fitbit.Fitbit(self.client_id, self.client_secret, access_token=self.access_token, refresh_token=self.refresh_token)
-        logging.info('Connected fitbit api')
-
-        if self.last_saved_at + 3600 > time.time():
-            self.authd_client.client.refresh_token()
-            logging.info('Before expires refresh token! refreshing token...')
+        logging.info(self.entity_id + '- Connected fitbit api')
     
     def fitbit_time_to_datetime(self, time):
         today_date = datetime.date.today()
@@ -170,10 +177,10 @@ class Fitbit2Influxdb:
         database = os.environ['DATABASE']
 
         if not(ip and port and username and password and database):
-            logging.error("Can't load environment. Please check .env files")
-            raise Exception('Check .env files. you should fill IP, PORT, USERNAME, PASSWORD, DATABASE.')
+            logging.error(self.entity_id + "- Can't load environment. Please check .env files")
+            raise Exception(self.entity_id + '- Check .env files. you should fill IP, PORT, USERNAME, PASSWORD, DATABASE.')
         
-        logging.info("Success load influxdb infomation.")
+        logging.info(self.entity_id + "- Success load influxdb infomation.")
         return ip, port, username, password, database
 
     def fitbit_load_json(self):
@@ -185,17 +192,21 @@ class Fitbit2Influxdb:
                 self.refresh_token = load_data['refresh_token']
                 self.client_id = load_data['client_id']
                 self.client_secret = load_data['client_secret']
-                logging.info('Finish load json file')
+                logging.info(self.entity_id + '- Finish load json file')
 
                 # DEFAULT check
                 
         else:
             with open(self.entity_id + '.json', 'w') as f:
                 json.dump(EXAM_FITBIT_FILE, f, indent=4)
-            logging.error('Cannot access' + self.entity_id + '.json: No such file and directory.')
+            logging.error(self.entity_id + '- Cannot access' + self.entity_id + '.json: No such file and directory.')
             raise Exception('Cannot access' + self.entity_id + '.json: No such file and directory. Please check README')
     
     def fitbit_save_json(self):
+        if self.last_saved_at + 3600 > time.time():
+            self.authd_client.client.refresh_token()
+            logging.info(self.entity_id + '- Before expires refresh token! refreshing token...')
+        
         token = self.authd_client.client.session.token
         config_contents = {
             "access_token": token.get("access_token"),
@@ -208,7 +219,17 @@ class Fitbit2Influxdb:
         with open(self.entity_id + '.json', 'w') as json_file:
             json.dump(config_contents, json_file, indent=4)
         
-        logging.info('Finish save json file. filename : ' + self.entity_id + '.json')
+        logging.info(self.entity_id + '- Finish save json file. filename : ' + self.entity_id + '.json')
+
+    def safe_transform(self, value):
+        result:float | str | None = None
+
+        try:
+            result = float(value)
+        except:
+            result = value
+
+        return result
 
     def influxdb_write_intraday_data(self, resource, dataset):
         for data in dataset:
@@ -224,16 +245,16 @@ class Fitbit2Influxdb:
                     'entity_id': self.entity_id + '_' + resource,
                 },
                 'fields': {
-                    'value': float(value)
+                    'value': self.safe_transform(value)
                 },
                 'time': timestamp
             }
             try:
                 self.influxdb_client.write_points([payload_json])
             except Exception as e:
-                print(e)
+                logging.error(self.entity_id + ' - error on influxdb_write_non_intraday_date.' + e.__str__())
 
-        logging.info(resource + '- Success write data')
+        logging.info(self.entity_id + ' - ' + resource + '- Success write data')
 
             
     def influxdb_write_non_intraday_date(self, resource, value):
@@ -244,40 +265,73 @@ class Fitbit2Influxdb:
                 'entity_id': self.entity_id + '_' + resource,
             },
             'fields': {
-                'value': float(value)
+                'value': self.safe_transform(value)
             },
         }
 
         try:
             self.influxdb_client.write_points([payload_json])
         except Exception as e:
-            logging.error(e)
+            logging.error(self.entity_id + ' - error on influxdb_write_non_intraday_date.' + e.__str__())
         
-        logging.info(resource + '- Success write data')
+        logging.info(self.entity_id + '- ' + resource + '- Success write data')
 
     def update(self):
+        response_intraday_result = []
+        response_non_intraday_result = []
+
         for resource in FITBIT_ACTIVITES_INTRADAY_RESOURCE:
             detail_level = '1sec' if resource == 'activities-heart' else '1min'
             response = self.authd_client.intraday_time_series(resource.replace('-', '/'), detail_level=detail_level)
 
             dataset = response[resource + '-intraday']['dataset']
 
-            self.influxdb_write_intraday_data(resource, dataset)
+            response_intraday_result.append({'resource': resource, 'dataset': dataset})
 
-            # with open(resource + '.json', 'w') as f:
-            #     json.dump(response, f)
+            with open(resource + '.json', 'w') as f:
+                json.dump(response, f)
+
+            logging.info(self.entity_id + '- ' + resource + '- resource append done!')
         
         for resource in (FITBIT_ACTIVITES_NON_INTRADAY_RESOURCE + FITBIT_BODY_RESOURCE + FITBIT_SLEEP_RESOURCE):
             response = self.authd_client.intraday_time_series(resource.replace('-', '/'), detail_level='1min')
 
             data = response[resource][0]['value']
 
-            self.influxdb_write_non_intraday_date(resource, data)
+            response_non_intraday_result.append({'resource': resource, 'data': data})
+
+            with open(resource + '.json', 'w') as f:
+                json.dump(response, f)
+
+            logging.info(self.entity_id + '- ' + resource + '- resource append done!')
         
-        logging.info('update done.')
+        for item in response_intraday_result:
+            self.influxdb_write_intraday_data(item['resource'], item['dataset'])
+        
+        for item in response_non_intraday_result:
+            self.influxdb_write_non_intraday_date(item['resource'], item['data'])
+        
+        logging.info(self.entity_id + '- update done.')
+
+        self.fitbit_save_json()
+
+
+class Fitbit2InfluxdbManager:
+    def __init__(self):
+        self.fitbit2influxdb_list = []
+    
+    def addFitbit(self, entity_name: str):
+        for fitbit2influxdb in self.fitbit2influxdb_list:
+            if fitbit2influxdb.entity_id == entity_name:
+                raise Exception('Same Entity_id. Please don\'t overlap name')
+        
+        new_fitbit = Fitbit2Influxdb(entity_name)
+        self.fitbit2influxdb_list.append(new_fitbit)
+        return new_fitbit
 
 if __name__ == '__main__':
     logging.info('Get Started Fitbit2InfluxDB')
-    test = Fitbit2Influxdb('fitbit')
+    fitbit_manager = Fitbit2InfluxdbManager()
 
-    test.update()
+    fitbit_a = fitbit_manager.addFitbit('fitbit')
+    # fitbit_b = fitbit_manager.addFitbit('fitbit2')
