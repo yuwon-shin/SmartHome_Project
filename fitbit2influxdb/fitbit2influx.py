@@ -6,7 +6,9 @@ import logging
 import time
 import fitbit
 import datetime
+import get2token
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.blocking import BlockingScheduler
 from influxdb import InfluxDBClient
 from dotenv import load_dotenv
 
@@ -139,6 +141,9 @@ class Fitbit2Influxdb:
         self.fitbit_save_json()
         self.connect_influxdb()
 
+
+        # print(self.authd_client.get_devices())
+
         self.sched = BackgroundScheduler()
 
         self.sched.add_job(self.update, 'cron', minute='29', id=self.entity_id+'-update-1')
@@ -158,7 +163,19 @@ class Fitbit2Influxdb:
     
     # fitbit API에 토근값과 함께 접속
     def connect_fitbit_api(self): 
-        self.authd_client = fitbit.Fitbit(self.client_id, self.client_secret, access_token=self.access_token, refresh_token=self.refresh_token)
+        # server = get2token.OAuth2Server(self.client_id, self.client_secret)
+        self.authd_client = fitbit.Fitbit(
+            self.client_id, 
+            self.client_secret, 
+            access_token=self.access_token, 
+            refresh_token=self.refresh_token,
+            redirect_uri='http://127.0.0.1:8080/',
+            refresh_cb=lambda x: None
+        )
+        # server.browser_authorize()
+
+        # self.authd_client = server.fitbit
+
         logging.info(self.entity_id + '- Connected fitbit api')
     
     def fitbit_time_to_datetime(self, time):
@@ -203,10 +220,6 @@ class Fitbit2Influxdb:
             raise Exception('Cannot access' + self.entity_id + '.json: No such file and directory. Please check README')
     
     def fitbit_save_json(self):
-        if self.last_saved_at + 3600 > time.time():
-            self.authd_client.client.refresh_token()
-            logging.info(self.entity_id + '- Before expires refresh token! refreshing token...')
-        
         token = self.authd_client.client.session.token
         config_contents = {
             "access_token": token.get("access_token"),
@@ -254,7 +267,7 @@ class Fitbit2Influxdb:
             except Exception as e:
                 logging.error(self.entity_id + ' - error on influxdb_write_non_intraday_date.' + e.__str__())
 
-        logging.info(self.entity_id + ' - ' + resource + '- Success write data')
+        logging.info(self.entity_id + '- ' + resource + '- Success write data')
 
             
     def influxdb_write_non_intraday_date(self, resource, value):
@@ -277,6 +290,11 @@ class Fitbit2Influxdb:
         logging.info(self.entity_id + '- ' + resource + '- Success write data')
 
     def update(self):
+        if int(time.time()) - self.last_saved_at >= 3600:
+            self.authd_client.client.refresh_token()
+            self.fitbit_save_json()
+            logging.info(self.entity_id + '- Before expires refresh token! refreshing token...')
+
         response_intraday_result = []
         response_non_intraday_result = []
 
@@ -288,9 +306,6 @@ class Fitbit2Influxdb:
 
             response_intraday_result.append({'resource': resource, 'dataset': dataset})
 
-            with open(resource + '.json', 'w') as f:
-                json.dump(response, f)
-
             logging.info(self.entity_id + '- ' + resource + '- resource append done!')
         
         for resource in (FITBIT_ACTIVITES_NON_INTRADAY_RESOURCE + FITBIT_BODY_RESOURCE + FITBIT_SLEEP_RESOURCE):
@@ -298,10 +313,10 @@ class Fitbit2Influxdb:
 
             data = response[resource][0]['value']
 
-            response_non_intraday_result.append({'resource': resource, 'data': data})
+            if data == '':
+                data = '-'
 
-            with open(resource + '.json', 'w') as f:
-                json.dump(response, f)
+            response_non_intraday_result.append({'resource': resource, 'data': data})
 
             logging.info(self.entity_id + '- ' + resource + '- resource append done!')
         
@@ -312,9 +327,6 @@ class Fitbit2Influxdb:
             self.influxdb_write_non_intraday_date(item['resource'], item['data'])
         
         logging.info(self.entity_id + '- update done.')
-
-        self.fitbit_save_json()
-
 
 class Fitbit2InfluxdbManager:
     def __init__(self):
@@ -328,10 +340,3 @@ class Fitbit2InfluxdbManager:
         new_fitbit = Fitbit2Influxdb(entity_name)
         self.fitbit2influxdb_list.append(new_fitbit)
         return new_fitbit
-
-if __name__ == '__main__':
-    logging.info('Get Started Fitbit2InfluxDB')
-    fitbit_manager = Fitbit2InfluxdbManager()
-
-    fitbit_a = fitbit_manager.addFitbit('fitbit')
-    # fitbit_b = fitbit_manager.addFitbit('fitbit2')

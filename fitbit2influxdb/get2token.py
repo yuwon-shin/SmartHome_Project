@@ -5,6 +5,8 @@ import sys
 import threading
 import traceback
 import webbrowser
+import time
+import json
 
 from urllib.parse import urlparse
 from base64 import b64encode
@@ -27,6 +29,7 @@ class OAuth2Server:
             client_secret,
             redirect_uri=redirect_uri,
             timeout=10,
+            refresh_cb=lambda x: None
         )
 
         self.redirect_uri = redirect_uri
@@ -82,17 +85,28 @@ class OAuth2Server:
 
 if __name__ == '__main__':
 
-    if not (len(sys.argv) == 3):
+    if not (len(sys.argv) == 3 or len(sys.argv) == 4):
         print("Arguments: client_id and client_secret")
         sys.exit(1)
 
-    server = OAuth2Server(*sys.argv[1:])
+    server = OAuth2Server(sys.argv[1], sys.argv[2])
     server.browser_authorize()
 
     profile = server.fitbit.user_profile_get()
     print('You are authorized to access data for the user: {}'.format(
         profile['user']['fullName']))
 
-    print('TOKEN\n=====\n')
-    for key, value in server.fitbit.client.session.token.items():
-        print('{} = {}'.format(key, value))
+    token = server.fitbit.client.session.token
+
+    json_content = {
+        'access_token': token['access_token'],
+        'refresh_token': token['refresh_token'],
+        'client_id': sys.argv[1],
+        'client_secret': sys.argv[2],
+        'last_saved_at': int(time.time())
+    }
+
+    print(json_content)
+    if len(sys.argv) == 4:
+        with open(sys.argv[3] + '.json', 'w') as json_file:
+            json.dump(json_content, json_file, indent=4)

@@ -1,1 +1,2 @@
-fitbit2influxdb/save.json
+fitbit2influxdb/*.json
+fitbit2influxdb/my.log
