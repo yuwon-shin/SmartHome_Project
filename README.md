@@ -1,2 +1,2 @@
 # SmartHome_Project
-Smart home projec (2022)
+Smart home project (2022)
