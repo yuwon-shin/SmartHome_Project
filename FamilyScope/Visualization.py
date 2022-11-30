@@ -248,9 +248,9 @@ body = dbc.Container([
         html.Div(style={'margin-bottom': '80px'})
     )
 
-    ],style={'background': '#ECECEC'}, fluid='xxl')
+    ], fluid='xxl')
 
-app.layout = dbc.Container([body],style={'background': '#ECECEC'}, fluid=True)
+app.layout = dbc.Container([body], fluid=True)
 
 @app.callback(
     [Output('video_player', 'src'),
