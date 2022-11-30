@@ -250,7 +250,7 @@ body = dbc.Container([
 
     ],style={'background': '#ECECEC'}, fluid='xxl')
 
-app.layout = html.Div([body])
+app.layout = dbc.Container([body],style={'background': '#ECECEC'}, fluid=True)
 
 @app.callback(
     [Output('video_player', 'src'),
