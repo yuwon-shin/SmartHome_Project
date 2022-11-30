@@ -99,7 +99,7 @@ body = dbc.Container([
                         , style={'textAlign': 'left', 'margin-left': '30px', 'margin-right': '20px','font-size': '14px'}),
                     html.P(['1. 개인별 그래프를 통해 시간에 따른 변화를 살펴보세요.', html.Br(),
                             '2. 가족의 데이터를 개인별 그래프와 가족 전체 그래프를 통해 비교해보세요.', html.Br(),
-                            '3. 개인별 그래프에서 보고 싶은 지점을 선택하면 해당 시간의 동영상을 보실 수 있습니다.']
+                            '3. 개인별 그래프에서 보고 싶은 지점을 클릭하면 해당 시간의 동영상을 보실 수 있습니다.']
                         , style={'textAlign': 'left', 'margin-left': '40px','margin-bottom': '15px','font-size': '14px'})
                     ])
                 ]
@@ -322,9 +322,10 @@ def update_vizualization(selected_value):
     figure = [fig1, fig3, fig5]
     for f in figure:
         f.update_layout(barmode='stack', width=370, height=180)
-        f.update_xaxes(categoryorder='array', categoryarray= ['아빠', '엄마', '아이'],tickfont={'size': 13})
+        f.update_xaxes(categoryorder='array', categoryarray= ['아빠', '엄마', '아이'],tickfont={'size': 15})
         f.update_layout(xaxis_title=None)
         f.update_yaxes(visible=False)
+        f.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         f.update_layout(
             margin=dict(l=5, r=5, t=0, b=20),
         )
@@ -356,6 +357,7 @@ def update_vizualization(selected_value):
         f.update_layout(showlegend=False) 
         f.update_yaxes(visible=False)
         f.update_layout(xaxis_title=None)
+        f.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         f.update_xaxes(tickformat="%H:%M",tickfont={'color': 'white'})
         f.update_layout(
             margin=dict(l=5, r=5, t=0, b=0),
@@ -365,7 +367,8 @@ def update_vizualization(selected_value):
         f.update_layout(showlegend=False) 
         f.update_yaxes(visible=False)
         f.update_layout(xaxis_title=None)
-        f.update_xaxes(tickformat="%H:%M",tickfont={'size': 13})
+        f.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        f.update_xaxes(tickformat="%H:%M",tickfont={'size': 15})
         f.update_layout(
             margin=dict(l=5, r=5, t=0, b=20),
         )
