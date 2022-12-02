@@ -48,6 +48,71 @@ global activities
 path = f'./SampleData/'
 activities = ['영상 시청', '보드 게임', '청소']
 
+def update_vizualization(selected_value):
+    activity = str(selected_value)
+    merged_df, merged_eda_occur, merged_hrv_occur, merged_active_occur = convert_to_level(path, activities, activity)
+    
+    fig1 = px.bar(merged_eda_occur, x="Member", y ='count', color='arousal_lv',color_discrete_map=arousal_colors) 
+    fig3 = px.bar(merged_hrv_occur, x="Member", y ='count', color='stress_lv',color_discrete_map=stress_colors) 
+    fig5 = px.bar(merged_active_occur, x="Member", y ='count', color='active_lv',color_discrete_map=active_colors) 
+
+    figure = [fig1, fig3, fig5]
+    for f in figure:
+        f.update_layout(barmode='stack', width=370, height=180)
+        f.update_xaxes(categoryorder='array', categoryarray= ['아빠', '엄마', '아이'],tickfont={'size': 15})
+        f.update_layout(xaxis_title=None)
+        f.update_yaxes(visible=False)
+        f.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        f.update_layout(
+            margin=dict(l=5, r=5, t=0, b=20),
+        )
+        f.update_layout(legend=dict(
+            title="",
+            orientation="h",
+            yanchor="top",
+            y=1.22,
+            xanchor="right",
+            x=1
+        ))
+
+
+    
+    fig2_1 = px.bar(merged_df, x="datetime", y ='new', color='arousal_lv_x',color_discrete_map=arousal_colors)
+    fig2_2 = px.bar(merged_df, x="datetime", y ='new', color='arousal_lv_y',color_discrete_map=arousal_colors)
+    fig2_3 = px.bar(merged_df, x="datetime", y ='new', color='arousal_lv_z',color_discrete_map=arousal_colors)
+    fig4_1 = px.bar(merged_df, x="datetime", y ='new', color='stress_lv_x',color_discrete_map=stress_colors)
+    fig4_2 = px.bar(merged_df, x="datetime", y ='new', color='stress_lv_y',color_discrete_map=stress_colors)
+    fig4_3 = px.bar(merged_df, x="datetime", y ='new', color='stress_lv_z',color_discrete_map=stress_colors)
+    fig6_1 = px.bar(merged_df, x="datetime", y ='new', color='active_lv_x',color_discrete_map=active_colors)
+    fig6_2 = px.bar(merged_df, x="datetime", y ='new', color='active_lv_y',color_discrete_map=active_colors)
+    fig6_3 = px.bar(merged_df, x="datetime", y ='new', color='active_lv_z',color_discrete_map=active_colors)
+
+    figures2 = [fig2_1,fig2_2, fig4_1, fig4_2, fig6_1, fig6_2]
+    figures3 = [fig2_3, fig4_3,fig6_3]
+    for f in figures2:
+        f.update_layout(width=370, height=100)
+        f.update_layout(showlegend=False) 
+        f.update_yaxes(visible=False)
+        f.update_layout(xaxis_title=None)
+        f.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        f.update_xaxes(tickformat="%H:%M",tickfont={'color': 'white'})
+        f.update_layout(
+            margin=dict(l=5, r=5, t=0, b=0),
+        )
+    for f in figures3:
+        f.update_layout(width=370, height=100)
+        f.update_layout(showlegend=False) 
+        f.update_yaxes(visible=False)
+        f.update_layout(xaxis_title=None)
+        f.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        f.update_xaxes(tickformat="%H:%M",tickfont={'size': 15})
+        f.update_layout(
+            margin=dict(l=5, r=5, t=0, b=20),
+        )
+
+    return [fig1, fig2_1, fig2_2, fig2_3, fig3, fig4_1, fig4_2, fig4_3, fig5, fig6_1, fig6_2, fig6_3]
+
+    
 ######### DASH APP LAYOUT ##############
 body = dbc.Container([
     dbc.Row(
@@ -63,13 +128,16 @@ body = dbc.Container([
         , style={'margin-top': '20px'}),
     dbc.Row(
         html.Div([
-            dcc.Dropdown(
-                id='dropdown-activity',
-                value="영상 시청",
-                options=['식사', '영상 시청', "보드 게임", '청소'],
-                style={'width': '150px',"margin-right": "10px",'float': 'right'}
-            ),
-            html.H6(['가족 공동 활동:'], style={"margin-top": "5px","margin-right": "20px", 'float': 'right', 'font-size': '18px'})
+            dbc.Tabs(
+                [
+                    dbc.Tab(label="식사", tab_id="tab-1", tab_style={"marginLeft": "auto"}, label_style={"color": "#6b6b6a"}, activeTabClassName="fw-bold"),
+                    dbc.Tab(label="영상 시청", tab_id="tab-2", label_style={"color": "#6b6b6a"}, activeTabClassName="fw-bold"),
+                    dbc.Tab(label="보드 게임", tab_id="tab-3", label_style={"color": "#6b6b6a"}, activeTabClassName="fw-bold"),
+                    dbc.Tab(label="청소", tab_id="tab-4", label_style={"color": "#6b6b6a"}, activeTabClassName="fw-bold")
+                ],
+                id="tabs",
+                active_tab="tab-2",
+             )
         ], style={'margin-top': '10px'})
     ),
     dbc.Row(children=[
@@ -253,6 +321,31 @@ body = dbc.Container([
 app.layout = dbc.Container([body], fluid=True)
 
 @app.callback(
+    [Output('arousal-overall','figure'),
+    Output('arousal-father','figure'),
+    Output('arousal-mother','figure'),
+    Output('arousal-kid','figure'),
+    Output('stress-overall','figure'),
+    Output('stress-father','figure'),
+    Output('stress-mother','figure'),
+    Output('stress-kid','figure'),
+    Output('active-overall','figure'),
+    Output('active-father','figure'),
+    Output('active-mother','figure'),
+    Output('active-kid','figure')],
+    [Input("tabs", "active_tab")])
+def switch_tab(at):
+    if at == 'tab-1':
+        return update_vizualization('식사')
+    elif at == 'tab-2':
+        return update_vizualization('영상 시청')
+    elif at == 'tab-3':
+        return update_vizualization('보드 게임')
+    elif at == 'tab-4':
+        return update_vizualization('청소')
+
+
+@app.callback(
     [Output('video_player', 'src'),
     Output("arousal-father", "clickData"),
     Output("arousal-mother", "clickData"),
@@ -263,7 +356,7 @@ app.layout = dbc.Container([body], fluid=True)
     Output("active-father", "clickData"),
     Output("active-mother", "clickData"),
     Output("active-kid", "clickData")],
-    [Input('dropdown-activity', 'value'),
+    [Input('tabs', 'active_tab'),
     Input("arousal-father", "clickData"),
     Input("arousal-mother", "clickData"),
     Input("arousal-kid", "clickData"),
@@ -274,8 +367,16 @@ app.layout = dbc.Container([body], fluid=True)
     Input("active-mother", "clickData"),
     Input("active-kid", "clickData")]
 )
-def update_video(selected_value, clickData1,clickData2,clickData3,clickData4,clickData5,clickData6, clickData7, clickData8, clickData9):
-    activity = selected_value
+def update_video(at, clickData1,clickData2,clickData3,clickData4,clickData5,clickData6, clickData7, clickData8, clickData9):
+    if at == 'tab-1':
+        activity = '식사'
+    elif at == 'tab-2':
+        activity = '영상 시청'
+    elif at == 'tab-3':
+        activity = '보드 게임'
+    elif at == 'tab-4':
+        activity = '청소'
+    
     list_of_elem = [clickData1,clickData2,clickData3,clickData4,clickData5,clickData6, clickData7, clickData8, clickData9]
     result = True
     for elem in list_of_elem:
@@ -297,82 +398,6 @@ def update_video(selected_value, clickData1,clickData2,clickData3,clickData4,cli
     src = f"/static/{activity}.mp4#t={ts},{te}"
     return [src, None, None, None, None, None, None, None, None, None]
 
-@app.callback(
-    [Output('arousal-overall','figure'),
-    Output('arousal-father','figure'),
-    Output('arousal-mother','figure'),
-    Output('arousal-kid','figure'),
-    Output('stress-overall','figure'),
-    Output('stress-father','figure'),
-    Output('stress-mother','figure'),
-    Output('stress-kid','figure'),
-    Output('active-overall','figure'),
-    Output('active-father','figure'),
-    Output('active-mother','figure'),
-    Output('active-kid','figure')],
-    [Input('dropdown-activity', 'value')],)
-def update_vizualization(selected_value):
-    activity = str(selected_value)
-    merged_df, merged_eda_occur, merged_hrv_occur, merged_active_occur = convert_to_level(path, activities, activity)
 
-    fig1 = px.bar(merged_eda_occur, x="Member", y ='count', color='arousal_lv',color_discrete_map=arousal_colors) 
-    fig3 = px.bar(merged_hrv_occur, x="Member", y ='count', color='stress_lv',color_discrete_map=stress_colors) 
-    fig5 = px.bar(merged_active_occur, x="Member", y ='count', color='active_lv',color_discrete_map=active_colors) 
-
-    figure = [fig1, fig3, fig5]
-    for f in figure:
-        f.update_layout(barmode='stack', width=370, height=180)
-        f.update_xaxes(categoryorder='array', categoryarray= ['아빠', '엄마', '아이'],tickfont={'size': 15})
-        f.update_layout(xaxis_title=None)
-        f.update_yaxes(visible=False)
-        f.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-        f.update_layout(
-            margin=dict(l=5, r=5, t=0, b=20),
-        )
-        f.update_layout(legend=dict(
-            title="",
-            orientation="h",
-            yanchor="top",
-            y=1.22,
-            xanchor="right",
-            x=1
-        ))
-
-
-    
-    fig2_1 = px.bar(merged_df, x="datetime", y ='new', color='arousal_lv_x',color_discrete_map=arousal_colors)
-    fig2_2 = px.bar(merged_df, x="datetime", y ='new', color='arousal_lv_y',color_discrete_map=arousal_colors)
-    fig2_3 = px.bar(merged_df, x="datetime", y ='new', color='arousal_lv_z',color_discrete_map=arousal_colors)
-    fig4_1 = px.bar(merged_df, x="datetime", y ='new', color='stress_lv_x',color_discrete_map=stress_colors)
-    fig4_2 = px.bar(merged_df, x="datetime", y ='new', color='stress_lv_y',color_discrete_map=stress_colors)
-    fig4_3 = px.bar(merged_df, x="datetime", y ='new', color='stress_lv_z',color_discrete_map=stress_colors)
-    fig6_1 = px.bar(merged_df, x="datetime", y ='new', color='active_lv_x',color_discrete_map=active_colors)
-    fig6_2 = px.bar(merged_df, x="datetime", y ='new', color='active_lv_y',color_discrete_map=active_colors)
-    fig6_3 = px.bar(merged_df, x="datetime", y ='new', color='active_lv_z',color_discrete_map=active_colors)
-
-    figures2 = [fig2_1,fig2_2, fig4_1, fig4_2, fig6_1, fig6_2]
-    figures3 = [fig2_3, fig4_3,fig6_3]
-    for f in figures2:
-        f.update_layout(width=370, height=100)
-        f.update_layout(showlegend=False) 
-        f.update_yaxes(visible=False)
-        f.update_layout(xaxis_title=None)
-        f.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-        f.update_xaxes(tickformat="%H:%M",tickfont={'color': 'white'})
-        f.update_layout(
-            margin=dict(l=5, r=5, t=0, b=0),
-        )
-    for f in figures3:
-        f.update_layout(width=370, height=100)
-        f.update_layout(showlegend=False) 
-        f.update_yaxes(visible=False)
-        f.update_layout(xaxis_title=None)
-        f.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-        f.update_xaxes(tickformat="%H:%M",tickfont={'size': 15})
-        f.update_layout(
-            margin=dict(l=5, r=5, t=0, b=20),
-        )
-
-    return [fig1, fig2_1, fig2_2, fig2_3, fig3, fig4_1, fig4_2, fig4_3, fig5, fig6_1, fig6_2, fig6_3]
 if __name__ == '__main__':
     app.run_server(debug=True)
