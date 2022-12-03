@@ -1,12 +1,3 @@
-import os
-import pandas as pd
-import numpy as np
-import math
-import csv
-from itertools import chain
-from datetime import datetime
-import matplotlib.pyplot as plt
-from biosppy.signals import eda
 import plotly.graph_objects as go
 import plotly.express as px
 import dash
@@ -18,23 +9,21 @@ import dash_bootstrap_components as dbc
 
 from utils import convert_to_level
 
-pd.set_option('mode.chained_assignment',  None)
-
 ############### Graph Colors ######################
 
-arousal_colors={
+arousal_colors={ "없음": '#d4d5d6',
                 "0: 낮음": "skyblue",
                 "1: 적당함": "dodgerblue",
                 "2: 높음": "mediumblue",
                 "3: 아주 높음": "midnightblue"}
 
-stress_colors={
+stress_colors={ "없음": "#d4d5d6",
                 "0: 낮음": "#f7cfcb",
                 "1: 적당함": "#e68f85",
                 "2: 높음": "#ba3325",
                 "3: 아주 높음": "#7d0f07"}
 
-active_colors={
+active_colors={ "없음": "#d4d5d6",
                 "0: 낮음": "#c5d6ba",
                 "1: 적당함": "#8bb872",
                 "2: 높음": "#3b8014",
@@ -44,13 +33,11 @@ server = Flask(__name__)
 app = dash.Dash(__name__, server=server, external_stylesheets=[dbc.themes.BOOTSTRAP, 'https://codepen.io/chriddyp/pen/bWLwgP.css'])
 
 global path
-global activities
-path = f'./SampleData/'
-activities = ['영상 시청', '보드 게임', '청소']
+path = f'./E4_Data/SampleData/' ## here
 
 def update_vizualization(selected_value):
     activity = str(selected_value)
-    merged_df, merged_eda_occur, merged_hrv_occur, merged_active_occur = convert_to_level(path, activities, activity)
+    merged_df, merged_eda_occur, merged_hrv_occur, merged_active_occur = convert_to_level(path, activity)
     
     fig1 = px.bar(merged_eda_occur, x="Member", y ='count', color='arousal_lv',color_discrete_map=arousal_colors) 
     fig3 = px.bar(merged_hrv_occur, x="Member", y ='count', color='stress_lv',color_discrete_map=stress_colors) 
@@ -58,7 +45,7 @@ def update_vizualization(selected_value):
 
     figure = [fig1, fig3, fig5]
     for f in figure:
-        f.update_layout(barmode='stack', width=370, height=180)
+        f.update_layout(barmode='stack', width=370, height=160)
         f.update_xaxes(categoryorder='array', categoryarray= ['아빠', '엄마', '아이'],tickfont={'size': 15})
         f.update_layout(xaxis_title=None)
         f.update_yaxes(visible=False)
@@ -74,7 +61,10 @@ def update_vizualization(selected_value):
             xanchor="right",
             x=1
         ))
-
+        for i in range(len(f.data)):
+            if f.data[i]['name'] == '없음':
+                f.data[i]['marker']['opacity'] = 0.2
+                f['data'][i]['showlegend'] = False
 
     
     fig2_1 = px.bar(merged_df, x="datetime", y ='new', color='arousal_lv_x',color_discrete_map=arousal_colors)
@@ -90,17 +80,22 @@ def update_vizualization(selected_value):
     figures2 = [fig2_1,fig2_2, fig4_1, fig4_2, fig6_1, fig6_2]
     figures3 = [fig2_3, fig4_3,fig6_3]
     for f in figures2:
-        f.update_layout(width=370, height=100)
+        f.update_layout(width=370, height=80)
         f.update_layout(showlegend=False) 
         f.update_yaxes(visible=False)
         f.update_layout(xaxis_title=None)
         f.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-        f.update_xaxes(tickformat="%H:%M",tickfont={'color': 'white'})
+        f.update_xaxes(tickformat="%H:%M",tickfont={'size': 15,'color': 'white'})
         f.update_layout(
             margin=dict(l=5, r=5, t=0, b=0),
         )
+        for i in range(len(f.data)):
+            if f.data[i]['name'] == '없음':
+                f.data[i]['marker']['line']['color'] = "gray"
+                f.data[i]['marker']['opacity'] = 0.3
+
     for f in figures3:
-        f.update_layout(width=370, height=100)
+        f.update_layout(width=370, height=80)
         f.update_layout(showlegend=False) 
         f.update_yaxes(visible=False)
         f.update_layout(xaxis_title=None)
@@ -109,6 +104,10 @@ def update_vizualization(selected_value):
         f.update_layout(
             margin=dict(l=5, r=5, t=0, b=20),
         )
+        for i in range(len(f.data)):
+            if f.data[i]['name'] == '없음':
+                f.data[i]['marker']['line']['color'] = "gray"
+                f.data[i]['marker']['opacity'] = 0.3
 
     return [fig1, fig2_1, fig2_2, fig2_3, fig3, fig4_1, fig4_2, fig4_3, fig5, fig6_1, fig6_2, fig6_3]
 
@@ -130,15 +129,19 @@ body = dbc.Container([
         html.Div([
             dbc.Tabs(
                 [
-                    dbc.Tab(label="식사", tab_id="tab-1", tab_style={"marginLeft": "auto"}, label_style={"color": "#6b6b6a"}, activeTabClassName="fw-bold"),
-                    dbc.Tab(label="영상 시청", tab_id="tab-2", label_style={"color": "#6b6b6a"}, activeTabClassName="fw-bold"),
-                    dbc.Tab(label="보드 게임", tab_id="tab-3", label_style={"color": "#6b6b6a"}, activeTabClassName="fw-bold"),
-                    dbc.Tab(label="청소", tab_id="tab-4", label_style={"color": "#6b6b6a"}, activeTabClassName="fw-bold")
+                    dbc.Tab(label="식사", tab_id="tab-1", tab_style={"marginLeft": "auto",'width': '150px', 'height': '50px'}
+                    , label_style={"color": "#6b6b6a",'font-size': '23px','textAlign': 'center','font-family': "Open Sans"}, activeTabClassName="fw-bold"),
+                    dbc.Tab(label="영상 시청", tab_id="tab-2"
+                    , tab_style={'width': '150px', 'height': '50px'}, label_style={"color": "#6b6b6a", 'font-size': '23px','textAlign': 'center','font-family': "Open Sans"}, activeTabClassName="fw-bold"),
+                    dbc.Tab(label="보드 게임", tab_id="tab-3"
+                    , tab_style={'width': '150px', 'height': '50px'}, label_style={"color": "#6b6b6a", 'font-size': '23px','textAlign': 'center','font-family': "Open Sans"}, activeTabClassName="fw-bold"),
+                    dbc.Tab(label="청소", tab_id="tab-4"
+                    , tab_style={'width': '150px', 'height': '50px'}, label_style={"color": "#6b6b6a", 'font-size': '23px','textAlign': 'center','font-family': "Open Sans"}, activeTabClassName="fw-bold")
                 ],
                 id="tabs",
                 active_tab="tab-2",
              )
-        ], style={'margin-top': '10px'})
+        ], style={'margin-top': '15px'})
     ),
     dbc.Row(children=[
         dbc.Col(
@@ -182,13 +185,13 @@ body = dbc.Container([
                 html.H5(children='가족 전체',style={'textAlign': 'center', 'font-size': '21px', 'margin-top':'65px','margin-bottom':'55px'}), style={ 'margin-left': '3px'}
             ),
             dbc.Row(
-                html.H5(children='아빠',style={'textAlign': 'center', 'margin-top':'35px', 'margin-bottom':'35px'}), style={ 'margin-left': '3px'}
+                html.H5(children='아빠',style={'textAlign': 'center', 'margin-top':'20px', 'margin-bottom':'25px'}), style={ 'margin-left': '3px'}
             ),
             dbc.Row(
-                html.H5(children='엄마',style={'textAlign': 'center', 'margin-top':'35px', 'margin-bottom':'35px' }), style={ 'margin-left': '3px'}
+                html.H5(children='엄마',style={'textAlign': 'center', 'margin-top':'20px', 'margin-bottom':'25px' }), style={ 'margin-left': '3px'}
             ),
             dbc.Row(
-                html.H5(children='아이',style={'textAlign': 'center', 'margin-top':'35px', 'margin-bottom':'35px' }), style={'margin-bottom': '10px', 'margin-left': '3px'}
+                html.H5(children='아이',style={'textAlign': 'center', 'margin-top':'20px' }), style={'margin-bottom': '10px', 'margin-left': '3px'}
             )
 
         ], width=1),
@@ -387,8 +390,8 @@ def update_video(at, clickData1,clickData2,clickData3,clickData4,clickData5,clic
     if result:
         src = f"/static/{activity}.mp4"
         return [src, None, None, None, None, None, None, None, None, None]
-        
-    merged_df, _,_,_ = convert_to_level(path, activities, activity)
+
+    merged_df, _,_,_ = convert_to_level(path, activity)
     init_hour = merged_df['datetime'].min().hour
     init_min = merged_df['datetime'].min().minute
     m = (int(clickData["points"][0]['x'][-5:-3])-init_hour)*60 + int(clickData["points"][0]['x'][-2:])- init_min

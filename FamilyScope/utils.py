@@ -1,15 +1,19 @@
 import os
-import pandas as pd
 import numpy as np
 import math
 import csv
 from itertools import chain
-from datetime import datetime
-import matplotlib.pyplot as plt
 from biosppy.signals import eda
-import plotly.graph_objects as go
-import plotly.express as px
+from scipy.stats import median_abs_deviation
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
+import pandas as pd
+pd.set_option('mode.chained_assignment',  None)
+
+
+global activities
+activities = ['baseline','영상 시청', '보드 게임', '청소']  ## here
 
 def load_data(path):
     file_list = os.listdir(path)
@@ -135,7 +139,7 @@ def calculate_active(acc_df, wnd):
 
     return active_df
 
-def calculate_featueres(path, activity:str):
+def calculate_features(path, activity:str):
     ### LOAD DATA
     father_data = load_data(path+'Father/')
     mother_data = load_data(path+'Mother/')
@@ -147,15 +151,14 @@ def calculate_featueres(path, activity:str):
         tags = list(reader)
         tags = list(map(float, list(chain.from_iterable(tags))))
 
-    ### Activity time slots
-    # time_intervals={'식사': [tags[0],tags[1]],
-    #                 '영상 시청':[tags[2],tags[3]],
-    #                 '보드 게임':[tags[4],tags[5]],
-    #                 '청소':[tags[6],tags[7]]}
-    time_intervals={'영상 시청':[tags[1],tags[2]],
+    ## here
+    time_intervals={'baseline':[father_data[0]['timestamp'].min(),tags[0]],
+                    '영상 시청':[tags[1],tags[2]],
                     '보드 게임':[tags[3],tags[4]],
                     '청소':[tags[5],tags[6]]}
 
+    # time_intervals={'영상 시청':[tags[0],tags[1]],
+    #                 '청소':[tags[2],tags[3]]}
 
     ### Slice Data by activity time
     ts = time_intervals[f'{activity}'][0]
@@ -201,37 +204,88 @@ def calculate_featueres(path, activity:str):
     mother_active_df = calculate_active(mother_acc,60)
     kid_active_df = calculate_active(kid_acc,60)
 
-    return father_eda_peaks, mother_eda_peaks, kid_eda_peaks, father_HRV_df, mother_HRV_df, kid_HRV_df, father_active_df, mother_active_df, kid_active_df
+    return [father_eda_peaks, mother_eda_peaks, kid_eda_peaks, father_HRV_df, mother_HRV_df, kid_HRV_df, father_active_df, mother_active_df, kid_active_df]
 
 def calculate_total(path, activities):
-    father_total_scr=[]
-    mother_total_scr=[]
-    kid_total_scr=[]
-    father_total_hrv=[]
-    mother_total_hrv=[]
-    kid_total_hrv=[]
-    father_total_act=[]
-    mother_total_act=[]
-    kid_total_act=[]
-
+    temp = []
     for acv in activities:
-        father_eda_peaks, mother_eda_peaks, kid_eda_peaks, father_HRV_df, mother_HRV_df, kid_HRV_df, father_active_df, mother_active_df, kid_active_df = calculate_featueres(path, acv)
-        father_total_scr = father_total_scr + father_eda_peaks['peak_per_min'].tolist()
-        mother_total_scr = mother_total_scr + mother_eda_peaks['peak_per_min'].tolist()
-        kid_total_scr = kid_total_scr + kid_eda_peaks['peak_per_min'].tolist()
-        father_total_hrv = father_total_hrv + father_HRV_df['RMSSD'].tolist()
-        mother_total_hrv = mother_total_hrv + mother_HRV_df['RMSSD'].tolist()
-        kid_total_hrv = kid_total_hrv + kid_HRV_df['RMSSD'].tolist()
-        father_total_act = father_total_act + father_active_df['magMean'].tolist()
-        mother_total_act = mother_total_act + mother_active_df['magMean'].tolist()
-        kid_total_act = kid_total_act + kid_active_df['magMean'].tolist()
-    return father_total_scr, mother_total_scr, kid_total_scr, father_total_hrv, mother_total_hrv, kid_total_hrv, father_total_act, mother_total_act, kid_total_act
+        if acv == 'baseline':
+            base_dfs = calculate_features(path, acv)
+            temp.append(base_dfs)
+        temp.append(calculate_features(path, acv))
+    
+    
+    for i in range(len(temp)):
+        if i ==0:
+            father_total_scr=temp[i][0]
+            mother_total_scr=temp[i][1]
+            kid_total_scr=temp[i][2]
+            father_total_hrv=temp[i][3]
+            mother_total_hrv=temp[i][4]
+            kid_total_hrv=temp[i][5]
+            father_total_act=temp[i][6]
+            mother_total_act=temp[i][7]
+            kid_total_act=temp[i][8]
+        else:
+            father_total_scr=pd.concat([father_total_scr,temp[i][0]])
+            mother_total_scr=pd.concat([mother_total_scr,temp[i][1]])
+            kid_total_scr=pd.concat([kid_total_scr,temp[i][2]])
+            father_total_hrv=pd.concat([father_total_hrv,temp[i][3]])
+            mother_total_hrv=pd.concat([mother_total_hrv,temp[i][4]])
+            kid_total_hrv=pd.concat([kid_total_hrv,temp[i][5]])
+            father_total_act=pd.concat([father_total_act,temp[i][6]])
+            mother_total_act=pd.concat([mother_total_act,temp[i][7]])
+            kid_total_act=pd.concat([kid_total_act,temp[i][8]])
+    
+    total_dfs = [father_total_scr, mother_total_scr, kid_total_scr, father_total_hrv, mother_total_hrv, kid_total_hrv, father_total_act, mother_total_act, kid_total_act]
+    result = []
+    for i in range(9):
+        a = base_dfs[i].iloc[:,1].mean()
+        mad = median_abs_deviation(total_dfs[i].iloc[:,1])
+        if i in [3,4,5]:
+            lower = total_dfs[i].iloc[:,1].median()-3*mad
+            index = total_dfs[i][total_dfs[i].iloc[:,1]<lower].index
+            total_dfs[i] = total_dfs[i].drop(index, inplace=False)
+            b = total_dfs[i].iloc[:,1].min()
+        else:
+            upper = total_dfs[i].iloc[:,1].median()+3*mad
+            index = total_dfs[i][total_dfs[i].iloc[:,1]>upper].index
+            total_dfs[i] = total_dfs[i].drop(index, inplace=False)
+            b = total_dfs[i].iloc[:,1].max()
+        result.append([a,b])
 
-def arousal_lv(total_scr, row):
+    return result
 
-    lower = np.quantile(total_scr, 0.25)
-    mid = np.quantile(total_scr, 0.5)
-    upper = np.quantile(total_scr, 0.75)
+def normlize_values(path, activity):
+    
+    dfs = calculate_features(path, activity)
+    vals = calculate_total(path, activities)
+ 
+    for i in range(9):
+        if i in [3,4,5]:
+            dfs[i].iloc[:,1] = (dfs[i].iloc[:,1] - vals[i][1])/(vals[i][0]-vals[i][1])
+        else:
+            dfs[i].iloc[:,1] = (dfs[i].iloc[:,1] - vals[i][0])/(vals[i][1]-vals[i][0])
+        dfs[i].iloc[:,1] = dfs[i].iloc[:,1].apply(lambda x: 1 if x >= 1 else x)
+        dfs[i].iloc[:,1] = dfs[i].iloc[:,1].apply(lambda x: 0 if x <= 0 else x)
+
+    
+    father_eda_peaks = dfs[0]
+    mother_eda_peaks = dfs[1]
+    kid_eda_peaks = dfs[2]
+    father_HRV_df = dfs[3]
+    mother_HRV_df = dfs[4]
+    kid_HRV_df = dfs[5]
+    father_active_df = dfs[6]
+    mother_active_df = dfs[7]
+    kid_active_df = dfs[8]
+    return father_eda_peaks, mother_eda_peaks, kid_eda_peaks, father_HRV_df, mother_HRV_df, kid_HRV_df, father_active_df, mother_active_df, kid_active_df
+
+def arousal_lv(scr_df, row):
+
+    lower = np.quantile(scr_df['peak_per_min'], 0.25)
+    mid = np.quantile(scr_df['peak_per_min'], 0.5)
+    upper = np.quantile(scr_df['peak_per_min'], 0.75)
     if (row['peak_per_min'] <= lower):
         return '0: 낮음'
     elif (row['peak_per_min'] > lower)&(row['peak_per_min']<=mid):
@@ -241,11 +295,11 @@ def arousal_lv(total_scr, row):
     else:
         return '3: 아주 높음'
 
-def stress_lv(total_hrv, row):
+def stress_lv(hrv_df, row):
 
-    lower = np.quantile(total_hrv, 0.25)
-    mid = np.quantile(total_hrv, 0.5)
-    upper = np.quantile(total_hrv, 0.75)
+    lower = np.quantile(hrv_df['RMSSD'], 0.25)
+    mid = np.quantile(hrv_df['RMSSD'], 0.5)
+    upper = np.quantile(hrv_df['RMSSD'], 0.75)
     if (row['RMSSD'] <= lower):
         return '3: 아주 높음'
     elif (row['RMSSD'] > lower)&(row['RMSSD']<=mid):
@@ -255,11 +309,11 @@ def stress_lv(total_hrv, row):
     else:
         return '0: 낮음'
 
-def active_lv(total_active, row):
+def active_lv(active_df, row):
 
-    lower = np.quantile(total_active, 0.25)
-    mid = np.quantile(total_active, 0.5)
-    upper = np.quantile(total_active, 0.75)
+    lower = np.quantile(active_df['magMean'], 0.25)
+    mid = np.quantile(active_df['magMean'], 0.5)
+    upper = np.quantile(active_df['magMean'], 0.75)
     if (row['magMean'] <= lower):
         return '0: 낮음'
     elif (row['magMean'] > lower)&(row['magMean']<=mid):
@@ -269,92 +323,99 @@ def active_lv(total_active, row):
     else:
         return '3: 아주 높음'
 
-def convert_to_level(path, activities, activity):
-    father_eda_peaks, mother_eda_peaks, kid_eda_peaks, father_HRV_df, mother_HRV_df, kid_HRV_df, father_active_df, mother_active_df, kid_active_df = calculate_featueres(path, activity)
-    father_total_scr, mother_total_scr, kid_total_scr, father_total_hrv, mother_total_hrv, kid_total_hrv, father_total_act, mother_total_act, kid_total_act = calculate_total(path, activities)
-
+def convert_to_level(path, activity):
+    father_eda_peaks, mother_eda_peaks, kid_eda_peaks, father_HRV_df, mother_HRV_df, kid_HRV_df, father_active_df, mother_active_df, kid_active_df = normlize_values(path, activity)
     ### Emotional aoursal level
-    father_eda_peaks['arousal_lv'] = father_eda_peaks.apply(lambda row: arousal_lv(father_total_scr,row), axis=1)
+    father_eda_peaks['arousal_lv'] = father_eda_peaks.apply(lambda row: arousal_lv(father_eda_peaks,row), axis=1)
     father_eda_peaks['datetime'] = pd.to_datetime(father_eda_peaks.timestamp, unit='s')+pd.Timedelta(hours=9)
     father_eda_peaks['datetime'] = father_eda_peaks['datetime'].dt.floor('T')
-    father_eda_peaks['Member'] = '아빠'
 
-    mother_eda_peaks['arousal_lv'] = mother_eda_peaks.apply(lambda row: arousal_lv(mother_total_scr,row), axis=1)
+    mother_eda_peaks['arousal_lv'] = mother_eda_peaks.apply(lambda row: arousal_lv(mother_eda_peaks,row), axis=1)
     mother_eda_peaks['datetime'] = pd.to_datetime(mother_eda_peaks.timestamp, unit='s')+pd.Timedelta(hours=9)
     mother_eda_peaks['datetime'] = mother_eda_peaks['datetime'].dt.floor('T')
-    mother_eda_peaks['Member'] = '엄마'
 
-    kid_eda_peaks['arousal_lv'] = kid_eda_peaks.apply(lambda row: arousal_lv(kid_total_scr,row), axis=1)
+    kid_eda_peaks['arousal_lv'] = kid_eda_peaks.apply(lambda row: arousal_lv(kid_eda_peaks,row), axis=1)
     kid_eda_peaks['datetime'] = pd.to_datetime(kid_eda_peaks.timestamp, unit='s')+pd.Timedelta(hours=9)
     kid_eda_peaks['datetime'] = kid_eda_peaks['datetime'].dt.floor('T')
-    kid_eda_peaks['Member'] = '아이'
 
-    merged_eda_df = pd.merge(father_eda_peaks, mother_eda_peaks, left_on='datetime',right_on='datetime',how='inner')
-    merged_eda_df = pd.merge(merged_eda_df, kid_eda_peaks, left_on='datetime',right_on='datetime',how='inner')
+    merged_eda_df = pd.merge(father_eda_peaks, mother_eda_peaks, left_on='datetime',right_on='datetime',how='outer')
+    merged_eda_df = pd.merge(merged_eda_df, kid_eda_peaks, left_on='datetime',right_on='datetime',how='outer')
     merged_eda_df = merged_eda_df.loc[:,['datetime','arousal_lv_x','arousal_lv_y','arousal_lv']]
     merged_eda_df.rename(columns = {'arousal_lv' : 'arousal_lv_z'}, inplace = True)
+    merged_eda_df.fillna('없음', inplace=True)
 
     ### Stress level
-    father_HRV_df['stress_lv'] = father_HRV_df.apply(lambda row: stress_lv(father_total_hrv,row), axis=1)
+    father_HRV_df['stress_lv'] = father_HRV_df.apply(lambda row: stress_lv(father_HRV_df,row), axis=1)
     father_HRV_df['datetime'] = pd.to_datetime(father_HRV_df.timestamp, unit='s')+pd.Timedelta(hours=9)
     father_HRV_df['datetime'] = father_HRV_df['datetime'].dt.floor('T')  #.dt.strftime('%H:%M')
-    father_HRV_df['Member'] = '아빠'
 
-    mother_HRV_df['stress_lv'] = mother_HRV_df.apply(lambda row: stress_lv(mother_total_hrv,row), axis=1)
+    mother_HRV_df['stress_lv'] = mother_HRV_df.apply(lambda row: stress_lv(mother_HRV_df,row), axis=1)
     mother_HRV_df['datetime'] = pd.to_datetime(mother_HRV_df.timestamp, unit='s')+pd.Timedelta(hours=9)
     mother_HRV_df['datetime'] = mother_HRV_df['datetime'].dt.floor('T')
-    mother_HRV_df['Member'] = '엄마'
 
-    kid_HRV_df['stress_lv'] = kid_HRV_df.apply(lambda row: stress_lv(kid_total_hrv,row), axis=1)
+    kid_HRV_df['stress_lv'] = kid_HRV_df.apply(lambda row: stress_lv(kid_HRV_df,row), axis=1)
     kid_HRV_df['datetime'] = pd.to_datetime(kid_HRV_df.timestamp, unit='s')+pd.Timedelta(hours=9)
     kid_HRV_df['datetime'] = kid_HRV_df['datetime'].dt.floor('T')
-    kid_HRV_df['Member'] = '아이'
 
-    merged_hrv_df = pd.merge(father_HRV_df, mother_HRV_df, left_on='datetime',right_on='datetime',how='inner')
-    merged_hrv_df = pd.merge(merged_hrv_df, kid_HRV_df, left_on='datetime',right_on='datetime',how='inner')
+    merged_hrv_df = pd.merge(father_HRV_df, mother_HRV_df, left_on='datetime',right_on='datetime',how='outer')
+    merged_hrv_df = pd.merge(merged_hrv_df, kid_HRV_df, left_on='datetime',right_on='datetime',how='outer')
     merged_hrv_df = merged_hrv_df.loc[:,['datetime','stress_lv_x','stress_lv_y','stress_lv']]
     merged_hrv_df.rename(columns = {'stress_lv' : 'stress_lv_z'}, inplace = True)
+    merged_hrv_df.fillna('없음', inplace=True)
 
     ### Active Level
-    father_active_df['active_lv'] = father_active_df.apply(lambda row: active_lv(father_total_act,row), axis=1)
+    father_active_df['active_lv'] = father_active_df.apply(lambda row: active_lv(father_active_df,row), axis=1)
     father_active_df['datetime'] = pd.to_datetime(father_active_df.timestamp, unit='s')+pd.Timedelta(hours=9)
     father_active_df['datetime'] = father_active_df['datetime'].dt.floor('T')
-    father_active_df['Member'] = '아빠'
 
-    mother_active_df['active_lv'] = mother_active_df.apply(lambda row: active_lv(mother_total_act,row), axis=1)
+    mother_active_df['active_lv'] = mother_active_df.apply(lambda row: active_lv(mother_active_df,row), axis=1)
     mother_active_df['datetime'] = pd.to_datetime(mother_active_df.timestamp, unit='s')+pd.Timedelta(hours=9)
     mother_active_df['datetime'] = mother_active_df['datetime'].dt.floor('T')
-    mother_active_df['Member'] = '엄마'
 
-    kid_active_df['active_lv'] = kid_active_df.apply(lambda row: active_lv(kid_total_act,row), axis=1)
+    kid_active_df['active_lv'] = kid_active_df.apply(lambda row: active_lv(kid_active_df,row), axis=1)
     kid_active_df['datetime'] = pd.to_datetime(kid_active_df.timestamp, unit='s')+pd.Timedelta(hours=9)
     kid_active_df['datetime'] = kid_active_df['datetime'].dt.floor('T')
-    kid_active_df['Member'] = '아이'
 
-    merged_active_df = pd.merge(father_active_df, mother_active_df, left_on='datetime',right_on='datetime',how='inner')
-    merged_active_df = pd.merge(merged_active_df, kid_active_df, left_on='datetime',right_on='datetime',how='inner')
+    merged_active_df = pd.merge(father_active_df, mother_active_df, left_on='datetime',right_on='datetime',how='outer')
+    merged_active_df = pd.merge(merged_active_df, kid_active_df, left_on='datetime',right_on='datetime',how='outer')
     merged_active_df = merged_active_df.loc[:,['datetime','active_lv_x','active_lv_y','active_lv']]
     merged_active_df.rename(columns = {'active_lv' : 'active_lv_z'}, inplace = True)
+    merged_active_df.fillna('없음', inplace=True)
 
-    merged_df = pd.merge(merged_eda_df, merged_hrv_df, left_on='datetime',right_on='datetime',how='inner')
-    merged_df = pd.merge(merged_df, merged_active_df, left_on='datetime',right_on='datetime',how='inner')
+    merged_df = pd.merge(merged_eda_df, merged_hrv_df, left_on='datetime',right_on='datetime',how='outer')
+    merged_df = pd.merge(merged_df, merged_active_df, left_on='datetime',right_on='datetime',how='outer')
     merged_df['new'] = np.ones(len(merged_df))
-    ## Aggregate
-    concated = pd.concat([father_eda_peaks.loc[father_eda_peaks.datetime <=merged_eda_df.datetime.max(),],
-                    mother_eda_peaks.loc[mother_eda_peaks.datetime <=merged_eda_df.datetime.max(),],
-                    kid_eda_peaks.loc[kid_eda_peaks.datetime <=merged_eda_df.datetime.max(),]]).loc[:,['Member','arousal_lv']]
+    merged_df.fillna('없음', inplace=True)
 
+    ## Aggregate
+    father_eda_peaks = pd.DataFrame({'datetime': merged_df.datetime, 'arousal_lv' : merged_df.arousal_lv_x})
+    father_eda_peaks['Member'] = '아빠'
+    mother_eda_peaks = pd.DataFrame({'datetime': merged_df.datetime, 'arousal_lv' : merged_df.arousal_lv_y})
+    mother_eda_peaks['Member'] = '엄마'
+    kid_eda_peaks = pd.DataFrame({'datetime': merged_df.datetime, 'arousal_lv' : merged_df.arousal_lv_z})
+    kid_eda_peaks['Member'] = '아이'
+
+    concated = pd.concat([father_eda_peaks,mother_eda_peaks,kid_eda_peaks]).loc[:,['Member','arousal_lv']]
     merged_eda_occur = pd.DataFrame({'count':concated.groupby(['Member','arousal_lv']).size()}).reset_index()
 
-    concated = pd.concat([father_HRV_df.loc[father_HRV_df.datetime <=merged_hrv_df.datetime.max(),],
-                    mother_HRV_df.loc[mother_HRV_df.datetime <=merged_hrv_df.datetime.max(),],
-                    kid_HRV_df.loc[kid_HRV_df.datetime <=merged_hrv_df.datetime.max(),]]).loc[:,['Member','stress_lv']]
+    father_HRV_df = pd.DataFrame({'datetime': merged_df.datetime, 'stress_lv' : merged_df.stress_lv_x})
+    father_HRV_df['Member'] = '아빠'
+    mother_HRV_df = pd.DataFrame({'datetime': merged_df.datetime, 'stress_lv' : merged_df.stress_lv_y})
+    mother_HRV_df['Member'] = '엄마'
+    kid_HRV_df = pd.DataFrame({'datetime': merged_df.datetime, 'stress_lv' : merged_df.stress_lv_z})
+    kid_HRV_df['Member'] = '아이'
+
+    concated = pd.concat([father_HRV_df, mother_HRV_df, kid_HRV_df]).loc[:,['Member','stress_lv']]
     merged_hrv_occur = pd.DataFrame({'count':concated.groupby(['Member','stress_lv']).size()}).reset_index()
 
-    concated = pd.concat([father_active_df.loc[father_active_df.datetime <=merged_active_df.datetime.max(),],
-                    mother_active_df.loc[mother_active_df.datetime <=merged_active_df.datetime.max(),],
-                    kid_active_df.loc[kid_active_df.datetime <=merged_active_df.datetime.max(),]]).loc[:,['Member','active_lv']]
+    father_active_df = pd.DataFrame({'datetime': merged_df.datetime, 'active_lv' : merged_df.active_lv_x})
+    father_active_df['Member'] = '아빠'
+    mother_active_df = pd.DataFrame({'datetime': merged_df.datetime, 'active_lv' : merged_df.active_lv_y})
+    mother_active_df['Member'] = '엄마'
+    kid_active_df = pd.DataFrame({'datetime': merged_df.datetime, 'active_lv' : merged_df.active_lv_z})
+    kid_active_df['Member'] = '아이'
+
+    concated = pd.concat([father_active_df,mother_active_df,kid_active_df]).loc[:,['Member','active_lv']]
     merged_active_occur = pd.DataFrame({'count':concated.groupby(['Member','active_lv']).size()}).reset_index()
-
-
+    
     return merged_df, merged_eda_occur, merged_hrv_occur, merged_active_occur
