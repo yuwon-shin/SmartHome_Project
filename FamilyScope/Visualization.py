@@ -11,41 +11,42 @@ from utils import convert_to_level
 
 ############### Graph Colors ######################
 
-arousal_colors={ "없음": '#d4d5d6',
-                "0: 낮음": "skyblue",
+arousal_colors={"0: 낮음": "skyblue",
                 "1: 적당함": "dodgerblue",
                 "2: 높음": "mediumblue",
-                "3: 아주 높음": "midnightblue"}
+                "3: 아주 높음": "midnightblue",
+                "4: 없음": '#d4d5d6'}
 
-stress_colors={ "없음": "#d4d5d6",
-                "0: 낮음": "#f7cfcb",
+stress_colors={ "0: 낮음": "#f7cfcb",
                 "1: 적당함": "#e68f85",
                 "2: 높음": "#ba3325",
-                "3: 아주 높음": "#7d0f07"}
+                "3: 아주 높음": "#7d0f07",
+                "4: 없음": "#d4d5d6"}
 
-active_colors={ "없음": "#d4d5d6",
-                "0: 낮음": "#c5d6ba",
+active_colors={ "0: 낮음": "#c5d6ba",
                 "1: 적당함": "#8bb872",
                 "2: 높음": "#3b8014",
-                "3: 아주 높음": "#112b02"}
+                "3: 아주 높음": "#112b02",
+                "4: 없음": "#d4d5d6"}
 
 server = Flask(__name__)
 app = dash.Dash(__name__, server=server, external_stylesheets=[dbc.themes.BOOTSTRAP, 'https://codepen.io/chriddyp/pen/bWLwgP.css'])
 
 global path
-path = f'./E4_Data/SampleData/' ## here
+path = f'./E4_Data/20221205/' ## here
 
 def update_vizualization(selected_value):
     activity = str(selected_value)
     merged_df, merged_eda_occur, merged_hrv_occur, merged_active_occur = convert_to_level(path, activity)
-    
+
     fig1 = px.bar(merged_eda_occur, x="Member", y ='count', color='arousal_lv',color_discrete_map=arousal_colors) 
     fig3 = px.bar(merged_hrv_occur, x="Member", y ='count', color='stress_lv',color_discrete_map=stress_colors) 
     fig5 = px.bar(merged_active_occur, x="Member", y ='count', color='active_lv',color_discrete_map=active_colors) 
 
     figure = [fig1, fig3, fig5]
     for f in figure:
-        f.update_layout(barmode='stack', width=370, height=160)
+        f.update_layout(barmode='stack',legend={'traceorder':'grouped'}, width=370, height=160)
+        f.update_yaxes(visible=False)
         f.update_xaxes(categoryorder='array', categoryarray= ['아빠', '엄마', '아이'],tickfont={'size': 15})
         f.update_layout(xaxis_title=None)
         f.update_yaxes(visible=False)
@@ -62,11 +63,11 @@ def update_vizualization(selected_value):
             x=1
         ))
         for i in range(len(f.data)):
-            if f.data[i]['name'] == '없음':
+            if f.data[i]['name'] == '4: 없음':
                 f.data[i]['marker']['opacity'] = 0.2
                 f['data'][i]['showlegend'] = False
 
-    
+
     fig2_1 = px.bar(merged_df, x="datetime", y ='new', color='arousal_lv_x',color_discrete_map=arousal_colors)
     fig2_2 = px.bar(merged_df, x="datetime", y ='new', color='arousal_lv_y',color_discrete_map=arousal_colors)
     fig2_3 = px.bar(merged_df, x="datetime", y ='new', color='arousal_lv_z',color_discrete_map=arousal_colors)
@@ -90,7 +91,7 @@ def update_vizualization(selected_value):
             margin=dict(l=5, r=5, t=0, b=0),
         )
         for i in range(len(f.data)):
-            if f.data[i]['name'] == '없음':
+            if f.data[i]['name'] == '4: 없음':
                 f.data[i]['marker']['line']['color'] = "gray"
                 f.data[i]['marker']['opacity'] = 0.3
 
@@ -105,7 +106,7 @@ def update_vizualization(selected_value):
             margin=dict(l=5, r=5, t=0, b=20),
         )
         for i in range(len(f.data)):
-            if f.data[i]['name'] == '없음':
+            if f.data[i]['name'] == '4: 없음':
                 f.data[i]['marker']['line']['color'] = "gray"
                 f.data[i]['marker']['opacity'] = 0.3
 
@@ -127,7 +128,7 @@ body = dbc.Container([
         , style={'margin-top': '20px'}),
     dbc.Row(
         html.Div([
-            dbc.Tabs(
+            dbc.Tabs(  ## here
                 [
                     dbc.Tab(label="식사", tab_id="tab-1", tab_style={"marginLeft": "auto",'width': '150px', 'height': '50px'}
                     , label_style={"color": "#6b6b6a",'font-size': '23px','textAlign': 'center','font-family': "Open Sans"}, activeTabClassName="fw-bold"),
@@ -139,7 +140,7 @@ body = dbc.Container([
                     , tab_style={'width': '150px', 'height': '50px'}, label_style={"color": "#6b6b6a", 'font-size': '23px','textAlign': 'center','font-family': "Open Sans"}, activeTabClassName="fw-bold")
                 ],
                 id="tabs",
-                active_tab="tab-2",
+                active_tab="tab-1",  ## here
              )
         ], style={'margin-top': '15px'})
     ),
@@ -149,7 +150,7 @@ body = dbc.Container([
                 html.Video(
                 controls = True,
                 id = 'video_player',
-            )], style={'margin-left': '10px', 'margin-top': '15px'}),
+            )], style={'height':"50%", 'width':"50%",'margin-left': '10px', 'margin-top': '15px'}),
         ),
         dbc.Col([
             dbc.Row([
