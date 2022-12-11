@@ -33,7 +33,7 @@ server = Flask(__name__)
 app = dash.Dash(__name__, server=server, external_stylesheets=[dbc.themes.BOOTSTRAP, 'https://codepen.io/chriddyp/pen/bWLwgP.css'])
 
 global path
-path = f'./E4_Data/20221205/' ## here
+path = f'./E4_Data/20221211/' ## here
 
 def update_vizualization(selected_value):
     activity = str(selected_value)
@@ -128,7 +128,7 @@ body = dbc.Container([
         , style={'margin-top': '20px'}),
     dbc.Row(
         html.Div([
-            dbc.Tabs(  ## here
+            dbc.Tabs(  
                 [
                     dbc.Tab(label="식사", tab_id="tab-1", tab_style={"marginLeft": "auto",'width': '150px', 'height': '50px'}
                     , label_style={"color": "#6b6b6a",'font-size': '23px','textAlign': 'center','font-family': "Open Sans"}, activeTabClassName="fw-bold"),
@@ -140,7 +140,7 @@ body = dbc.Container([
                     , tab_style={'width': '150px', 'height': '50px'}, label_style={"color": "#6b6b6a", 'font-size': '23px','textAlign': 'center','font-family': "Open Sans"}, activeTabClassName="fw-bold")
                 ],
                 id="tabs",
-                active_tab="tab-1",  ## here
+                active_tab="tab-1",
              )
         ], style={'margin-top': '15px'})
     ),

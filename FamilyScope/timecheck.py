@@ -3,7 +3,7 @@ from itertools import chain
 import time
 
 
-path = f'./SampleData/'
+path = f'./E4_Data/20221211/'
 with open(path+ 'Father/' + 'tags.csv', newline='') as f:
     reader = csv.reader(f)
     tags = list(reader)

@@ -152,10 +152,10 @@ def calculate_active(acc_df, wnd):
 
     return active_df
 
-def calculate_features(path, activity:str):
+def calculate_features(path, activity:str):  ## here
     ### LOAD DATA
-    father_data = load_data_ver2(path+'Father/')
-    mother_data = load_data_ver2(path+'Father/')
+    father_data = load_data(path+'Father/')
+    mother_data = load_data(path+'Mother/')
     kid_data = load_data(path+'Kid/')
     
 
@@ -166,10 +166,10 @@ def calculate_features(path, activity:str):
 
     ## here
     time_intervals={'baseline':[tags[0],tags[1]],
-                    '식사':[tags[3],tags[4]],
-                    '영상 시청':[tags[5],tags[6]],
-                    '보드 게임':[tags[7],tags[8]],
-                    '청소':[tags[9],tags[10]]}
+                    '식사':[tags[2],tags[3]],
+                    '영상 시청':[tags[4],tags[5]],
+                    '보드 게임':[tags[6],tags[7]],
+                    '청소':[tags[8],tags[9]]}
 
     ### Slice Data by activity time
     ts = time_intervals[f'{activity}'][0]
@@ -253,10 +253,16 @@ def calculate_total(path, activities):
     for i in range(9):
         a = base_dfs[i].iloc[:,1].mean()
         mad = median_abs_deviation(total_dfs[i].iloc[:,1])
-        upper = total_dfs[i].iloc[:,1].median()+3*mad
-        index = total_dfs[i][total_dfs[i].iloc[:,1]>upper].index
-        total_dfs[i] = total_dfs[i].drop(index, inplace=False)
-        b = total_dfs[i].iloc[:,1].max()
+        if i in [3,4,5]:
+            lower = total_dfs[i].iloc[:,1].median()-3*mad
+            index = total_dfs[i][total_dfs[i].iloc[:,1]<lower].index
+            total_dfs[i] = total_dfs[i].drop(index, inplace=False)
+            b = total_dfs[i].iloc[:,1].min()
+        else:
+            upper = total_dfs[i].iloc[:,1].median()+3*mad
+            index = total_dfs[i][total_dfs[i].iloc[:,1]>upper].index
+            total_dfs[i] = total_dfs[i].drop(index, inplace=False)
+            b = total_dfs[i].iloc[:,1].max()
         result.append([a,b])
     return result
 
@@ -264,17 +270,13 @@ def normlize_values(path, activity):
     
     dfs = calculate_features(path, activity)
     vals = calculate_total(path, activities)
- 
     for i in range(9):
-        # if i in [3,4,5]:
-        #     dfs[i].iloc[:,1] = (dfs[i].iloc[:,1] - vals[i][1])/(vals[i][0]-vals[i][1])
-        # else:
-        dfs[i].iloc[:,1] = (dfs[i].iloc[:,1] - vals[i][0])/(vals[i][1]-vals[i][0])
+        if i in [3,4,5]:
+            dfs[i].iloc[:,1] = (dfs[i].iloc[:,1] - vals[i][1])/(vals[i][0]-vals[i][1])
+        else:
+            dfs[i].iloc[:,1] = (dfs[i].iloc[:,1] - vals[i][0])/(vals[i][1]-vals[i][0])
         dfs[i].iloc[:,1] = dfs[i].iloc[:,1].apply(lambda x: 1 if x >= 1 else x)
         dfs[i].iloc[:,1] = dfs[i].iloc[:,1].apply(lambda x: 0 if x <= 0 else x)
-        if i in [3,4,5]:
-            dfs[i].iloc[:,1] = 1 - dfs[i].iloc[:,1]
-
     
     father_eda_peaks = dfs[0]
     mother_eda_peaks = dfs[1]
@@ -287,11 +289,11 @@ def normlize_values(path, activity):
     kid_active_df = dfs[8]
     return father_eda_peaks, mother_eda_peaks, kid_eda_peaks, father_HRV_df, mother_HRV_df, kid_HRV_df, father_active_df, mother_active_df, kid_active_df
 
-def arousal_lv(scr_df, row):
+def arousal_lv(row):
 
-    lower = np.quantile(scr_df['peak_per_min'], 0.25)
-    mid = np.quantile(scr_df['peak_per_min'], 0.5)
-    upper = np.quantile(scr_df['peak_per_min'], 0.75)
+    lower = 0.25
+    mid = 0.5
+    upper = 0.75
     if (row['peak_per_min'] <= lower):
         return '0: 낮음'
     elif (row['peak_per_min'] > lower)&(row['peak_per_min']<=mid):
@@ -301,11 +303,12 @@ def arousal_lv(scr_df, row):
     else:
         return '3: 아주 높음'
 
-def stress_lv(hrv_df, row):
+def stress_lv(row):
 
-    lower = np.quantile(hrv_df['RMSSD'], 0.25)
-    mid = np.quantile(hrv_df['RMSSD'], 0.5)
-    upper = np.quantile(hrv_df['RMSSD'], 0.75)
+    lower = 0.25
+    mid = 0.5
+    upper = 0.75
+    
     if (row['RMSSD'] <= lower):
         return '3: 아주 높음'
     elif (row['RMSSD'] > lower)&(row['RMSSD']<=mid):
@@ -315,11 +318,11 @@ def stress_lv(hrv_df, row):
     else:
         return '0: 낮음'
 
-def active_lv(active_df, row):
+def active_lv(row):
 
-    lower = np.quantile(active_df['magMean'], 0.25)
-    mid = np.quantile(active_df['magMean'], 0.5)
-    upper = np.quantile(active_df['magMean'], 0.75)
+    lower = 0.25
+    mid = 0.5
+    upper = 0.75
     if (row['magMean'] <= lower):
         return '0: 낮음'
     elif (row['magMean'] > lower)&(row['magMean']<=mid):
@@ -333,21 +336,21 @@ def convert_to_level(path, activity):
     father_eda_peaks, mother_eda_peaks, kid_eda_peaks, father_HRV_df, mother_HRV_df, kid_HRV_df, father_active_df, mother_active_df, kid_active_df = normlize_values(path, activity)
     ### Emotional aoursal level
     if not father_eda_peaks.empty:
-        father_eda_peaks['arousal_lv'] = father_eda_peaks.apply(lambda row: arousal_lv(father_eda_peaks,row), axis=1)
+        father_eda_peaks['arousal_lv'] = father_eda_peaks.apply(lambda row: arousal_lv(row), axis=1)
     else:
         father_eda_peaks['arousal_lv'] = None
     father_eda_peaks['datetime'] = pd.to_datetime(father_eda_peaks.timestamp, unit='s')+pd.Timedelta(hours=9)
     father_eda_peaks['datetime'] = father_eda_peaks['datetime'].dt.floor('T')
     
     if not mother_eda_peaks.empty:
-        mother_eda_peaks['arousal_lv'] = mother_eda_peaks.apply(lambda row: arousal_lv(mother_eda_peaks,row), axis=1)
+        mother_eda_peaks['arousal_lv'] = mother_eda_peaks.apply(lambda row: arousal_lv(row), axis=1)
     else:
         mother_eda_peaks['arousal_lv'] = None
     mother_eda_peaks['datetime'] = pd.to_datetime(mother_eda_peaks.timestamp, unit='s')+pd.Timedelta(hours=9)
     mother_eda_peaks['datetime'] = mother_eda_peaks['datetime'].dt.floor('T')
 
     if not kid_eda_peaks.empty:
-        kid_eda_peaks['arousal_lv'] = kid_eda_peaks.apply(lambda row: arousal_lv(kid_eda_peaks,row), axis=1)
+        kid_eda_peaks['arousal_lv'] = kid_eda_peaks.apply(lambda row: arousal_lv(row), axis=1)
     else:
         kid_eda_peaks['arousal_lv'] = None
     kid_eda_peaks['datetime'] = pd.to_datetime(kid_eda_peaks.timestamp, unit='s')+pd.Timedelta(hours=9)
@@ -361,21 +364,21 @@ def convert_to_level(path, activity):
 
     ### Stress level
     if not father_HRV_df.empty:
-        father_HRV_df['stress_lv'] = father_HRV_df.apply(lambda row: stress_lv(father_HRV_df,row), axis=1)
+        father_HRV_df['stress_lv'] = father_HRV_df.apply(lambda row: stress_lv(row), axis=1)
     else:
         father_HRV_df['stress_lv'] = None
     father_HRV_df['datetime'] = pd.to_datetime(father_HRV_df.timestamp, unit='s')+pd.Timedelta(hours=9)
     father_HRV_df['datetime'] = father_HRV_df['datetime'].dt.floor('T')  #.dt.strftime('%H:%M')
 
     if not mother_HRV_df.empty:
-        mother_HRV_df['stress_lv'] = mother_HRV_df.apply(lambda row: stress_lv(mother_HRV_df,row), axis=1)
+        mother_HRV_df['stress_lv'] = mother_HRV_df.apply(lambda row: stress_lv(row), axis=1)
     else:
         mother_HRV_df['stress_lv'] = None
     mother_HRV_df['datetime'] = pd.to_datetime(mother_HRV_df.timestamp, unit='s')+pd.Timedelta(hours=9)
     mother_HRV_df['datetime'] = mother_HRV_df['datetime'].dt.floor('T')
 
     if not kid_HRV_df.empty:
-        kid_HRV_df['stress_lv'] = kid_HRV_df.apply(lambda row: stress_lv(kid_HRV_df,row), axis=1)
+        kid_HRV_df['stress_lv'] = kid_HRV_df.apply(lambda row: stress_lv(row), axis=1)
     else:
         kid_HRV_df['stress_lv'] = None
     kid_HRV_df['datetime'] = pd.to_datetime(kid_HRV_df.timestamp, unit='s')+pd.Timedelta(hours=9)
@@ -389,21 +392,21 @@ def convert_to_level(path, activity):
 
     ### Active Level
     if not father_active_df.empty:
-        father_active_df['active_lv'] = father_active_df.apply(lambda row: active_lv(father_active_df,row), axis=1)
+        father_active_df['active_lv'] = father_active_df.apply(lambda row: active_lv(row), axis=1)
     else:
         father_active_df['active_lv'] = None
     father_active_df['datetime'] = pd.to_datetime(father_active_df.timestamp, unit='s')+pd.Timedelta(hours=9)
     father_active_df['datetime'] = father_active_df['datetime'].dt.floor('T')
 
     if not mother_active_df.empty:
-        mother_active_df['active_lv'] = mother_active_df.apply(lambda row: active_lv(mother_active_df,row), axis=1)
+        mother_active_df['active_lv'] = mother_active_df.apply(lambda row: active_lv(row), axis=1)
     else:
         mother_active_df['active_lv'] = None
     mother_active_df['datetime'] = pd.to_datetime(mother_active_df.timestamp, unit='s')+pd.Timedelta(hours=9)
     mother_active_df['datetime'] = mother_active_df['datetime'].dt.floor('T')
 
     if not kid_active_df.empty:
-        kid_active_df['active_lv'] = kid_active_df.apply(lambda row: active_lv(kid_active_df,row), axis=1)
+        kid_active_df['active_lv'] = kid_active_df.apply(lambda row: active_lv(row), axis=1)
     else:
         kid_active_df['active_lv'] = None
     kid_active_df['datetime'] = pd.to_datetime(kid_active_df.timestamp, unit='s')+pd.Timedelta(hours=9)
